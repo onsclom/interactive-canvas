@@ -21,7 +21,7 @@ function getTransformMatrix(
     .scale(baseScale, baseScale)
     .translate(canvasRect.width / 2, canvasRect.height / 2)
     .scale(camera.zoom, camera.zoom)
-    .rotate((-camera.rotation * 180) / Math.PI) // DOMMatrix uses degrees
+    .rotate((-camera.rotation * 180) / Math.PI)
     .translate(-camera.x, -camera.y);
 }
 
@@ -62,4 +62,14 @@ export function worldToScreen(
   const point = new DOMPoint(worldX, worldY);
   const screenPoint = point.matrixTransform(matrix);
   return { x: screenPoint.x, y: screenPoint.y };
+}
+
+export function aspectFitZoom(
+  canvasRect: DOMRect,
+  minWidth: number,
+  minHeight: number,
+) {
+  const zoomForWidth = canvasRect.width / minWidth;
+  const zoomForHeight = canvasRect.height / minHeight;
+  return Math.min(zoomForWidth, zoomForHeight);
 }

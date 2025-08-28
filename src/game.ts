@@ -2,10 +2,7 @@ import * as Input from "./input";
 import * as Camera from "./camera";
 
 const state = {
-  character: {
-    x: 0,
-    y: 0,
-  },
+  character: { x: 0, y: 0 },
   camera: Camera.create(),
 };
 
@@ -33,6 +30,8 @@ export function tick(ctx: CanvasRenderingContext2D, dt: number) {
 
   {
     // camera movement
+    state.camera.x = state.character.x;
+    state.camera.y = state.character.y;
     if (Input.keysDown.has("ArrowUp")) {
       state.camera.zoom *= 1 + 0.001 * dt;
     }
@@ -46,8 +45,6 @@ export function tick(ctx: CanvasRenderingContext2D, dt: number) {
       state.camera.rotation -= 0.001 * dt;
     }
   }
-  state.camera.x = state.character.x;
-  state.camera.y = state.character.y;
 
   const gameWorld = {
     width: 200,

@@ -1,4 +1,6 @@
-import { tick } from "./demo";
+// import { tick } from "./demo";
+import { tick } from "./clock-game";
+
 import { startLoop } from "./canvas-render-loop";
 import { registerInputListeners } from "./input";
 

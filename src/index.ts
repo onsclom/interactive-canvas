@@ -1,4 +1,4 @@
-import { tick } from "./game";
+import { tick } from "./demo";
 import { startLoop } from "./canvas-render-loop";
 import { registerInputListeners } from "./input";
 

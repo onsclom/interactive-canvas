@@ -1,7 +1,11 @@
 import * as Camera from "./camera";
 import * as Input from "./input";
 import { lerp } from "./math";
-import { playFailureSound, playSuccessSound } from "./sound";
+import {
+  playFailureSound,
+  playPerfectHitSound,
+  playSuccessSound,
+} from "./sound";
 
 /*
 TODO:
@@ -175,6 +179,7 @@ export function tick(ctx: CanvasRenderingContext2D, dt: number) {
             size: 10,
             color: "gold",
           });
+          playPerfectHitSound(state.score);
         } else {
           state.score += 1;
           state.scoreIntensity = 0.5;

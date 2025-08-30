@@ -25,9 +25,34 @@ export function playSuccessSound(score: number) {
   source.start();
 }
 
+function generatedPerfectHitSoundBuffer() {
+  const duration = 0.1; // seconds
+  const frequency = 880; // Hz
+  const length = sampleRate * duration;
+  const buffer = audioCtx.createBuffer(1, length, sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) {
+    const time = i / sampleRate;
+    // linear taper off
+    const volume = 1 - time / duration;
+    // square wave
+    data[i] =
+      Math.sign(Math.sin(2 * Math.PI * frequency * time)) * 0.5 * volume;
+  }
+  return buffer;
+}
+const perfectHitSoundBuffer = generatedPerfectHitSoundBuffer();
+export function playPerfectHitSound(score: number) {
+  const source = audioCtx.createBufferSource();
+  source.buffer = perfectHitSoundBuffer;
+  // higher score -> higher pitch
+  source.playbackRate.value = 1 + score * 0.05;
+  source.connect(audioCtx.destination);
+  source.start();
+}
+
 function generateFailureSoundBuffer() {
   const duration = 0.5; // seconds
-  const frequency = 220; // Hz
   const length = sampleRate * duration;
   const buffer = audioCtx.createBuffer(1, length, sampleRate);
   const data = buffer.getChannelData(0);

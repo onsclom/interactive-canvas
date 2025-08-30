@@ -3,7 +3,7 @@ const sampleRate = audioCtx.sampleRate;
 
 function generateSuccessSoundBuffer() {
   const duration = 0.25; // seconds
-  const frequency = 880; // Hz
+  const frequency = 440; // Hz
   const length = sampleRate * duration;
   const buffer = audioCtx.createBuffer(1, length, sampleRate);
   const data = buffer.getChannelData(0);
@@ -16,10 +16,11 @@ function generateSuccessSoundBuffer() {
   return buffer;
 }
 const successSoundBuffer = generateSuccessSoundBuffer();
-export function playSuccessSound() {
+export function playSuccessSound(score: number) {
   const source = audioCtx.createBufferSource();
   source.buffer = successSoundBuffer;
-  source.playbackRate.value = 0.9 + Math.random() * 0.5;
+  // higher score -> higher pitch
+  source.playbackRate.value = 1 + score * 0.05;
   source.connect(audioCtx.destination);
   source.start();
 }
@@ -34,10 +35,9 @@ function generateFailureSoundBuffer() {
     const time = i / sampleRate;
     // linear taper off
     const volume = 1 - time / duration;
-    // triangle wave
-    const t = (time * frequency) % 1;
-    const triangle = t < 0.5 ? t * 4 - 1 : (1 - t) * 4 - 1;
-    data[i] = triangle * volume;
+    // white noise
+    const noise = (Math.random() * 2 - 1) * 0.3;
+    data[i] = noise * volume;
   }
   return buffer;
 }

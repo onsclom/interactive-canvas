@@ -236,7 +236,7 @@ export function tick(ctx: CanvasRenderingContext2D, dt: number) {
   );
 
   Camera.drawWithCamera(ctx, state.camera, (ctx) => {
-    state.backgroundParticleSpawnTimer += dt;
+    // state.backgroundParticleSpawnTimer += dt;
     const backgroundParticleSpawnInterval = 50;
 
     {
@@ -347,7 +347,7 @@ export function tick(ctx: CanvasRenderingContext2D, dt: number) {
     ctx.lineCap = "round";
     ctx.globalAlpha = 1;
     for (const _ of Array(lightningStrikes)) {
-      ctx.strokeStyle = "red";
+      ctx.strokeStyle = "yellow";
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(0, 0);
@@ -373,7 +373,7 @@ export function tick(ctx: CanvasRenderingContext2D, dt: number) {
     }
     ctx.globalAlpha = 1;
 
-    ctx.fillStyle = "red";
+    ctx.fillStyle = "yellow";
     ctx.beginPath();
     const radius = 8;
     ctx.ellipse(0, 0, radius, radius, 0, 0, Math.PI * 2);

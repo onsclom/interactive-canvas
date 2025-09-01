@@ -9,19 +9,21 @@ export const mouse = {
   justRightClicked: false,
   leftClickDown: false,
   rightClickDown: false,
-  wheelDelta: 0,
+  wheelDx: 0,
+  wheelDy: 0,
 };
 
 export function resetInput() {
   mouse.justLeftClicked = false;
   mouse.justRightClicked = false;
-  mouse.wheelDelta = 0;
+  mouse.wheelDx = 0;
+  mouse.wheelDy = 0;
   keysJustPressed.clear();
   keysJustReleased.clear();
 }
 
 export function registerInputListeners(canvas: HTMLCanvasElement) {
-  canvas.addEventListener("pointerdown", (e) => {
+  document.body.addEventListener("pointerdown", (e) => {
     if (e.button === 0) {
       mouse.leftClickDown = true;
       mouse.justLeftClicked = true;
@@ -31,7 +33,7 @@ export function registerInputListeners(canvas: HTMLCanvasElement) {
     }
   });
 
-  canvas.addEventListener("pointerup", (e) => {
+  document.body.addEventListener("pointerup", (e) => {
     if (e.button === 0) {
       mouse.leftClickDown = false;
     } else if (e.button === 2) {
@@ -39,22 +41,23 @@ export function registerInputListeners(canvas: HTMLCanvasElement) {
     }
   });
 
-  canvas.addEventListener("pointermove", (e) => {
+  document.body.addEventListener("pointermove", (e) => {
     const rect = canvas.getBoundingClientRect();
     mouse.x = e.clientX - rect.left;
     mouse.y = e.clientY - rect.top;
   });
 
-  canvas.addEventListener("pointerenter", () => {
+  document.body.addEventListener("pointerenter", () => {
     mouse.onCanvas = true;
   });
 
-  canvas.addEventListener("pointerleave", () => {
+  document.body.addEventListener("pointerleave", () => {
     mouse.onCanvas = false;
   });
 
-  canvas.addEventListener("wheel", (e) => {
-    mouse.wheelDelta += e.deltaY;
+  document.body.addEventListener("wheel", (e) => {
+    mouse.wheelDx += e.deltaX;
+    mouse.wheelDy += e.deltaY;
   });
 
   document.body.addEventListener("keydown", (e) => {
@@ -69,4 +72,6 @@ export function registerInputListeners(canvas: HTMLCanvasElement) {
     keysDown.delete(e.key);
     keysJustReleased.add(e.key);
   });
+
+  // detect zooming
 }

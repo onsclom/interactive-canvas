@@ -1,372 +1,457 @@
-import { mouse } from "./input";
-import { assert } from "./assert";
-
-const borderColor = "#111";
-const uiBackgroundColor = "#444";
-const borderSize = 1;
-const textColor = "#eee";
-
-type Ref<T> = { value: T };
-
-export function ref<T>(value: T): Ref<T> {
-  return { value };
-}
-
-type UI = {
-  type: "button" | "checkbox" | "textbox" | "text";
-  x: number;
-  y: number;
-  width?: number;
-  height?: number;
-  id: string;
-  text?: string; // only for button
-  checkedValue?: Ref<boolean>; // only for checkbox
-  textValue?: Ref<string>; // only for textbox
-  placeholder?: string; // only for textbox
-  textAlign?: CanvasTextAlign;
-  textBaseline?: CanvasTextBaseline;
-};
+/*
+planning:
+- bring this into canvas-basics
+- use existing input system
+- make animation for clicking?
+- animate values on checkboxes?
+- make elements take props obj (with good default values)
+- think about what a multiple pass solution would grant us
+  - no delay hover is nice.. we can delete the "nextHovered" craziness
+*/
 
 export const state = {
-  hovering: null as string | null,
-  clicked: null as string | null,
-  focused: null as string | null,
-  uiToTick: [] as UI[],
-  keysPressed: [] as string[],
-  lastAction: {} as Record<string, number>,
-  animatedHover: {} as Record<string, number>, // approaches 0 (not hovered) or 1 (hovered)
+  hovered: null as string | null, // last frames hovered
+  dragging: null as string | null,
+  resizing: null as string | null,
+  nextHovered: null as string | null, // running hover on current frame
+
+  cursor: "default" as CSSStyleDeclaration["cursor"],
+
+  mouse: {
+    x: 0,
+    y: 0,
+    prevx: 0,
+    prevy: 0,
+    dx: 0,
+    dy: 0,
+    justClicked: false,
+    down: false,
+  },
+  ctx: null as CanvasRenderingContext2D | null,
+
+  // persisted ui state for things like animation
+  persisted: new Map<
+    string,
+    {
+      // values for transitions
+      hovered_t: number;
+    }
+  >(),
+
+  frame: {
+    // to handle z indexing
+    windows: [] as {
+      id: string;
+      tick: () => void;
+    }[],
+  },
+
+  windowPersistent: new Map<
+    string,
+    {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      z: number;
+    }
+  >(),
+  windowZ: 0,
+  inWindow: null as string | null,
+
+  theme: {
+    elementBackground: "#555",
+    textColor: "#eee",
+    font: "16px sans-serif",
+    borderSize: 1,
+    borderColor: "#333",
+  },
 };
 
-document.body.addEventListener("keydown", (event) => {
-  if (event.metaKey || event.ctrlKey || event.altKey) return;
-  if (state.focused) {
-    state.keysPressed.push(event.key);
-    event.preventDefault();
-  }
+document.body.addEventListener("mousemove", (e) => {
+  state.mouse.x = e.clientX;
+  state.mouse.y = e.clientY;
+});
+document.body.addEventListener("mousedown", (e) => {
+  state.mouse.justClicked = true;
+  state.mouse.down = true;
+});
+document.body.addEventListener("mouseup", (e) => {
+  state.mouse.down = false;
 });
 
-function drawActionFlash(
-  ctx: CanvasRenderingContext2D,
-  actionFactor: number,
+export function register(
+  id: string,
   x: number,
   y: number,
   width: number,
   height: number,
 ) {
-  ctx.save();
-  ctx.fillStyle = "white";
-  ctx.globalAlpha = actionFactor * 0.25;
-  ctx.fillRect(x, y, width, height);
-  ctx.restore();
+  let mouseInsideParentWindow = true;
+  if (state.inWindow) {
+    const contentRect = windowContentSpace(state.inWindow);
+    x += contentRect.x;
+    y += contentRect.y;
+    const mouseInWindow =
+      state.mouse.x >= contentRect.x &&
+      state.mouse.x <= contentRect.x + contentRect.width &&
+      state.mouse.y >= contentRect.y &&
+      state.mouse.y <= contentRect.y + contentRect.height;
+    mouseInsideParentWindow = mouseInWindow;
+  }
+
+  const hovered =
+    state.mouse.x >= x &&
+    state.mouse.x <= x + width &&
+    state.mouse.y >= y &&
+    state.mouse.y <= y + height &&
+    mouseInsideParentWindow;
+
+  if (hovered) {
+    state.nextHovered = id;
+  }
+
+  if (!state.persisted.has(id)) {
+    state.persisted.set(id, {
+      hovered_t: 0,
+    });
+  }
 }
 
-export function commitUI(ctx: CanvasRenderingContext2D, dt: number) {
-  // calculate new hovered
-  state.hovering = null;
-  for (const ui of state.uiToTick) {
-    if (ui.type === "text") continue;
-    const { x, y, width, height, id } = ui;
-    assert(width !== undefined && height !== undefined);
-    const isHovered =
-      mouse.x >= x &&
-      mouse.x <= x + width &&
-      mouse.y >= y &&
-      mouse.y <= y + height;
-    if (isHovered) {
-      state.hovering = id;
-    }
-  }
+export function button(
+  text: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  forceId?: string,
+): boolean {
+  const id = forceId ?? `button-${state.inWindow}-${text}`;
+  register(id, x, y, width, height);
 
-  ctx.canvas.style.cursor = state.hovering ? "pointer" : "default";
+  const hovered = state.hovered === id;
 
-  // calculate clicked
-  state.clicked = null;
-  if (mouse.justLeftClicked) {
-    state.clicked = state.hovering;
-    if (state.clicked) {
-      state.lastAction[state.clicked] = performance.now();
-    }
-    state.focused = state.hovering;
-  }
+  // draw button
+  const ctx = state.ctx;
+  if (ctx) {
+    // border bakcground
 
-  for (const ui of state.uiToTick) {
-    const actionAnimationTime = 500;
-    const idsLastAction = state.lastAction[ui.id];
-    const timeSinceAction = idsLastAction
-      ? performance.now() - idsLastAction
-      : actionAnimationTime;
-    const actionFactor =
-      (1 -
-        Math.min(timeSinceAction, actionAnimationTime) / actionAnimationTime) **
-      2;
-
-    // lets handle hover now
-    const prevAnimatedHover = state.animatedHover[ui.id] ?? 0;
-    const hoverTarget = state.hovering === ui.id ? 1 : 0;
-
-    function lerp(a: number, b: number, percent: number) {
-      const diff = b - a;
-      return a + diff * percent;
-    }
-
-    const smoothing = 0.012;
-    const newAnimatedHover = lerp(
-      prevAnimatedHover,
-      hoverTarget,
-      1 - Math.exp(-smoothing * dt),
+    ctx.fillStyle = state.theme.borderColor;
+    ctx.fillRect(x, y, width, height);
+    ctx.fillStyle = state.theme.elementBackground;
+    ctx.fillRect(
+      x + state.theme.borderSize,
+      y + state.theme.borderSize,
+      width - state.theme.borderSize * 2,
+      height - state.theme.borderSize * 2,
     );
-    state.animatedHover[ui.id] = newAnimatedHover;
 
-    switch (ui.type) {
-      case "checkbox": {
-        const { x, y, width, height, id, checkedValue: value } = ui;
-        assert(width !== undefined && height !== undefined);
-        assert(value !== undefined);
-        if (state.clicked === id) {
-          value.value = !value.value;
+    ctx.fillStyle = state.theme.textColor;
+
+    {
+      const hovered_t = state.persisted.get(id)?.hovered_t || 0;
+      ctx.save();
+      ctx.globalAlpha = hovered_t * 0.2;
+      ctx.fillStyle = "white";
+      ctx.fillRect(
+        x + state.theme.borderSize,
+        y + state.theme.borderSize,
+        width - state.theme.borderSize * 2,
+        height - state.theme.borderSize * 2,
+      );
+      ctx.restore();
+    }
+
+    ctx.font = state.theme.font;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x + width / 2, y + height / 2);
+  }
+
+  if (hovered) {
+    state.hovered = id;
+    state.cursor = "pointer";
+    if (state.mouse.justClicked) {
+      state.persisted.get(id)!.hovered_t = 0;
+      return true;
+    }
+  }
+  return false;
+}
+
+type Pointer<T> = { get: () => T; set: (v: T) => void };
+export function ref<O extends object, K extends keyof O>(
+  obj: O,
+  key: K,
+): Pointer<O[K]> {
+  return {
+    get: () => obj[key],
+    set: (v: O[K]) => {
+      obj[key] = v;
+    },
+  };
+}
+
+export function checkbox(
+  label: string,
+  x: number,
+  y: number,
+  size: number,
+  pointerValue: Pointer<boolean>,
+) {
+  const id = `checkbox-${label}`;
+  register(id, x, y, size, size);
+
+  const hovered = state.hovered === id;
+  if (hovered) {
+    state.cursor = "pointer";
+  }
+  const clicked = hovered && state.mouse.justClicked;
+  const prevChecked = pointerValue.get();
+  if (clicked) {
+    pointerValue.set(!prevChecked);
+    state.persisted.get(id)!.hovered_t = 0;
+  }
+  const checked = pointerValue.get();
+
+  const ctx = state.ctx;
+  if (ctx) {
+    ctx.fillStyle = state.theme.borderColor;
+    ctx.fillRect(x, y, size, size);
+    ctx.fillStyle = state.theme.elementBackground;
+    ctx.fillRect(
+      x + state.theme.borderSize,
+      y + state.theme.borderSize,
+      size - state.theme.borderSize * 2,
+      size - state.theme.borderSize * 2,
+    );
+    const hovered_t = state.persisted.get(id)?.hovered_t || 0;
+    ctx.save();
+    ctx.globalAlpha = hovered_t * 0.2;
+    ctx.fillStyle = "white";
+    ctx.fillRect(
+      x + state.theme.borderSize,
+      y + state.theme.borderSize,
+      size - state.theme.borderSize * 2,
+      size - state.theme.borderSize * 2,
+    );
+    ctx.restore();
+    if (checked) {
+      ctx.fillStyle = state.theme.textColor;
+      ctx.fillRect(x + size * 0.2, y + size * 0.2, size * 0.6, size * 0.6);
+    }
+    ctx.fillStyle = state.theme.textColor;
+    ctx.font = "16px sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, x + size + 8, y + size / 2);
+  }
+}
+
+const windowTopBarHeight = 32;
+function windowContentSpace(id: string) {
+  const window = state.windowPersistent.get(id)!;
+  return {
+    x: window.x + state.theme.borderSize,
+    y: window.y + windowTopBarHeight + state.theme.borderSize,
+    width: window.width,
+    height: window.height,
+  };
+}
+
+export function window(
+  title: string,
+  initX: number,
+  initY: number,
+  initWidth: number,
+  initHeight: number,
+  innerUi: () => void,
+) {
+  const id = `window-${title}`;
+  state.frame.windows.push({
+    id,
+    tick: () => {
+      // register window
+      if (!state.windowPersistent.has(id)) {
+        state.windowPersistent.set(id, {
+          x: initX,
+          y: initY,
+          width: initWidth,
+          height: initHeight,
+          z: ++state.windowZ,
+        });
+      }
+      {
+        const { x, y, width, height } = state.windowPersistent.get(id)!;
+        register(id, x, y, width, height + windowTopBarHeight);
+        const hovered = state.hovered === id;
+        const dragging = state.dragging === id;
+        const resizing = state.resizing === id;
+        if (dragging) {
+          if (state.mouse.down === false) {
+            state.dragging = null;
+          } else {
+            const newX = x + state.mouse.dx;
+            const newY = y + state.mouse.dy;
+            state.windowPersistent.set(id, {
+              x: newX,
+              y: newY,
+              width,
+              height,
+              z: ++state.windowZ,
+            });
+          }
+          state.cursor = "grabbing";
+        } else if (hovered) {
+          if (state.mouse.justClicked) {
+            state.dragging = id;
+          }
+          state.cursor = "grab";
+        } else if (resizing) {
+          if (state.mouse.down === false) {
+            state.resizing = null;
+          } else {
+            const newWidth = Math.max(100, width + state.mouse.dx);
+            const newHeight = Math.max(50, height + state.mouse.dy);
+            state.windowPersistent.set(id, {
+              x,
+              y,
+              width: newWidth,
+              height: newHeight,
+              z: ++state.windowZ,
+            });
+          }
         }
-
-        ctx.fillStyle = borderColor;
-        ctx.fillRect(x, y, width, height);
-        ctx.fillStyle = uiBackgroundColor;
-        ctx.fillRect(
-          x + borderSize,
-          y + borderSize,
-          width - borderSize * 2,
-          height - borderSize * 2,
-        );
-
-        {
-          ctx.save();
-          ctx.fillStyle = "white";
-          ctx.globalAlpha = newAnimatedHover * 0.1;
-          ctx.fillRect(
-            x + borderSize,
-            y + borderSize,
-            width - borderSize * 2,
-            height - borderSize * 2,
-          );
-          ctx.restore();
-        }
-
-        if (value.value) {
-          ctx.fillStyle = textColor;
-          ctx.fillRect(x + 5, y + 5, width - 10, height - 10);
-        }
-        drawActionFlash(ctx, actionFactor, x, y, width, height);
-        break;
       }
 
-      case "button": {
-        const { x, y, width, height, text } = ui;
-        assert(width !== undefined && height !== undefined);
-        ctx.fillStyle = borderColor;
-        ctx.fillRect(x, y, width, height);
+      // get updated window state
+      const { x, y, width, height } = state.windowPersistent.get(id)!;
 
-        ctx.fillStyle = uiBackgroundColor;
-        ctx.fillRect(
-          x + borderSize,
-          y + borderSize,
-          width - borderSize * 2,
-          height - borderSize * 2,
-        );
-
+      const ctx = state.ctx;
+      if (ctx) {
+        const contentRect = windowContentSpace(id);
         {
-          ctx.save();
-          ctx.globalAlpha = newAnimatedHover * 0.1;
-          ctx.fillStyle = "white";
-          ctx.fillRect(
-            x + borderSize,
-            y + borderSize,
-            width - borderSize * 2,
-            height - borderSize * 2,
-          );
-          ctx.restore();
-        }
-
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillStyle = textColor;
-
-        {
+          // cut out content rect so it can be transparent
           ctx.save();
           ctx.beginPath();
           ctx.rect(
-            x + borderSize,
-            y + borderSize,
-            width - borderSize * 2,
-            height - borderSize * 2,
+            contentRect.x,
+            contentRect.y,
+            contentRect.width,
+            contentRect.height,
           );
-          ctx.clip();
-          ctx.fillText(text || "", x + width / 2, y + height / 2);
+          ctx.rect(
+            x,
+            y,
+            width + state.theme.borderSize * 2,
+            height + windowTopBarHeight + state.theme.borderSize * 2,
+          );
+          ctx.clip("evenodd");
+
+          ctx.fillStyle = state.theme.borderColor;
+          ctx.fillRect(
+            x,
+            y,
+            width + state.theme.borderSize * 2,
+            height + windowTopBarHeight + state.theme.borderSize * 2,
+          );
           ctx.restore();
         }
-
-        drawActionFlash(ctx, actionFactor, x, y, width, height);
-
-        break;
-      }
-      case "textbox": {
-        const { x, y, width, height, id, textValue, placeholder } = ui;
-        assert(width !== undefined && height !== undefined);
-        assert(textValue !== undefined);
-
-        // Handle keyboard input
-        if (state.focused === id) {
-          for (const key of state.keysPressed) {
-            if (key === "Backspace") {
-              textValue.value = textValue.value.slice(0, -1);
-            } else if (key === "Enter" || key === "Escape") {
-              state.focused = null;
-            } else if (key.length === 1) {
-              textValue.value += key;
-            }
-          }
-        }
-
-        // Render textbox
-        const isFocused = state.focused === id;
-
-        ctx.fillStyle = borderColor;
-        ctx.fillRect(x, y, width, height);
-
-        ctx.fillStyle = uiBackgroundColor;
+        ctx.fillStyle = state.theme.elementBackground;
+        ctx.globalAlpha = 0.9;
         ctx.fillRect(
-          x + borderSize,
-          y + borderSize,
-          width - borderSize * 2,
-          height - borderSize * 2,
+          contentRect.x,
+          contentRect.y,
+          contentRect.width,
+          contentRect.height,
         );
-
-        // Render text
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = state.theme.textColor;
+        ctx.font = state.theme.font;
         ctx.textAlign = "left";
         ctx.textBaseline = "middle";
-        ctx.fillStyle = textColor;
+        ctx.fillText(title, x + 8, y + windowTopBarHeight / 2);
 
-        const displayText = textValue.value || placeholder || "";
-        const textX = x + 8;
-        const textY = y + height / 2;
-
-        // Clip text to textbox bounds
         ctx.save();
         ctx.beginPath();
-        ctx.rect(x + 4, y, width - 8, height);
+        ctx.rect(
+          contentRect.x,
+          contentRect.y,
+          contentRect.width,
+          contentRect.height,
+        );
         ctx.clip();
-
-        ctx.save();
-        ctx.fillStyle = textColor;
-        if (!textValue.value && placeholder) {
-          ctx.globalAlpha = 0.5;
+        ctx.translate(
+          x + state.theme.borderSize,
+          y + windowTopBarHeight + state.theme.borderSize,
+        );
+        state.inWindow = id;
+        innerUi();
+        const resizeButtonSize = 20;
+        const buttonId = `window-resize-${id}`;
+        if (
+          button(
+            "⇲",
+            width - resizeButtonSize + state.theme.borderSize,
+            height - resizeButtonSize + state.theme.borderSize,
+            resizeButtonSize,
+            resizeButtonSize,
+            buttonId,
+          )
+        ) {
+          state.resizing = id;
         }
-        ctx.fillText(displayText, textX, textY);
-        ctx.restore();
-
-        // Draw cursor if focused
-        if (isFocused) {
-          const textWidth = ctx.measureText(textValue.value).width;
-          ctx.fillStyle = textColor;
-          ctx.fillRect(textX + textWidth, textY - 8, 1, 16);
+        state.inWindow = null;
+        if (state.resizing === id || state.hovered === buttonId) {
+          state.cursor = "nwse-resize";
         }
         ctx.restore();
+      }
+    },
+  });
+}
 
-        drawActionFlash(ctx, actionFactor, x, y, width, height);
-        break;
-      }
-      case "text": {
-        const { x, y, text, textAlign, textBaseline } = ui;
-        ctx.textAlign = textAlign || "left";
-        ctx.textBaseline = textBaseline || "top";
-        ctx.fillStyle = textColor;
-        ctx.fillText(text || "", x, y);
-        break;
-      }
-    }
+export function start(ctx: CanvasRenderingContext2D) {
+  state.ctx = ctx;
+  state.mouse.dx = state.mouse.x - state.mouse.prevx;
+  state.mouse.dy = state.mouse.y - state.mouse.prevy;
+}
+
+export function end(dt: number) {
+  // sort windows by z
+  state.frame.windows.sort((a, b) => {
+    const az = state.windowPersistent.get(a.id)?.z || 0;
+    const bz = state.windowPersistent.get(b.id)?.z || 0;
+    return az - bz;
+  });
+  state.frame.windows.forEach((w) => w.tick());
+  state.frame.windows = [];
+
+  // apply cursor
+  const canvas = state.ctx?.canvas;
+  if (canvas) {
+    canvas.style.cursor = state.cursor;
   }
+  state.cursor = "default";
 
-  state.keysPressed = [];
-  state.uiToTick = [];
-}
+  state.hovered = state.nextHovered;
+  state.nextHovered = null;
+  state.mouse.justClicked = false;
+  state.mouse.prevx = state.mouse.x;
+  state.mouse.prevy = state.mouse.y;
 
-export function checkbox(props: {
-  id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  value: Ref<boolean>;
-}) {
-  const { x, y, width, height, value, id } = props;
-  state.uiToTick.push({
-    type: "checkbox",
-    x,
-    y,
-    width,
-    height,
-    id,
-    checkedValue: value,
+  // TODO: purge old entries
+  state.persisted.forEach((entry, id) => {
+    const target_hovered = state.hovered === id ? 1 : 0;
+    const smoothing = 0.01;
+    entry.hovered_t = lerp(
+      entry.hovered_t,
+      target_hovered,
+      1 - Math.exp(-smoothing * dt),
+    );
   });
 }
 
-export function button(props: {
-  text: string;
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
-  id?: string;
-}): boolean {
-  const { text, x = 0, y = 0, width = 100, height = 50 } = props;
-  const id = props.id ?? `button-${text}`;
-  state.uiToTick.push({
-    type: "button",
-    x,
-    y,
-    width,
-    height,
-    text,
-    id,
-  });
-  return state.clicked === id;
-}
-
-export function textbox(props: {
-  id: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  value: Ref<string>;
-  placeholder?: string;
-}): boolean {
-  const { x, y, width, height, value, id, placeholder } = props;
-  state.uiToTick.push({
-    type: "textbox",
-    x,
-    y,
-    width,
-    height,
-    id,
-    textValue: value,
-    placeholder,
-  });
-  return false; // TODO: return true if "enter" was pressed while focused
-}
-
-export function text(props: {
-  text: string;
-  x: number;
-  y: number;
-  textAlign?: CanvasTextAlign;
-  textBaseline?: CanvasTextBaseline;
-}) {
-  const { text, x, y, textAlign, textBaseline } = props;
-  state.uiToTick.push({
-    type: "text",
-    x,
-    y,
-    text,
-    textAlign,
-    textBaseline,
-    id: `text-${text}`,
-  });
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t;
 }

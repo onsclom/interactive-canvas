@@ -300,7 +300,7 @@ export function tick(ctx: CanvasRenderingContext2D, dt: number) {
     }
 
     ctx.lineWidth = 0.5;
-    ctx.strokeStyle = white;
+    ctx.strokeStyle = "white";
     ctx.beginPath();
     ctx.ellipse(
       0,
@@ -330,7 +330,7 @@ export function tick(ctx: CanvasRenderingContext2D, dt: number) {
     ctx.closePath();
 
     // target center target
-    ctx.strokeStyle = white;
+    ctx.strokeStyle = "white";
     ctx.beginPath();
     ctx.ellipse(
       0,
@@ -434,7 +434,7 @@ export function tick(ctx: CanvasRenderingContext2D, dt: number) {
       ctx.rotate(Math.sin(performance.now() * 0.01) * state.scoreIntensity);
     }
     ctx.fillText(`${state.score}`, 0.5, 0.5);
-    ctx.fillStyle = white;
+    ctx.fillStyle = "white";
     ctx.fillText(`${state.score}`, 0, 0);
   });
 

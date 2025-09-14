@@ -101,7 +101,7 @@ export function tick(ctx: CanvasRenderingContext2D, dt: number) {
   }
 
   Camera.drawWithCamera(ctx, state.camera, (ctx) => {
-    ctx.strokeStyle = "white";
+    ctx.strokeStyle = white;
     ctx.lineWidth = 2;
     ctx.strokeRect(
       -gameWorld.width / 2,
@@ -131,7 +131,7 @@ export function tick(ctx: CanvasRenderingContext2D, dt: number) {
     state.camera,
   );
   ctx.font = "16px sans-serif";
-  ctx.fillStyle = "white";
+  ctx.fillStyle = white;
   ctx.fillText(
     `world cursor: ${Math.round(worldCursor.x)}, ${Math.round(worldCursor.y)}`,
     10,

@@ -23,29 +23,46 @@ export function resetInput() {
 }
 
 export function registerInputListeners(canvas: HTMLCanvasElement) {
-  document.body.addEventListener("pointerdown", (e) => {
-    if (e.button === 0) {
-      mouse.leftClickDown = true;
-      mouse.justLeftClicked = true;
-    } else if (e.button === 2) {
-      mouse.rightClickDown = true;
-      mouse.justRightClicked = true;
-    }
-  });
+  document.body.addEventListener(
+    "pointerdown",
+    (e) => {
+      e.preventDefault();
+      if (e.pointerType === "touch") {
+        mouse.x = e.clientX;
+        mouse.y = e.clientY;
+        mouse.leftClickDown = true;
+        mouse.justLeftClicked = true;
+        // capture the pointer to continue receiving events outside the canvas?
+      } else if (e.button === 0) {
+        mouse.leftClickDown = true;
+        mouse.justLeftClicked = true;
+      } else if (e.button === 2) {
+        mouse.rightClickDown = true;
+        mouse.justRightClicked = true;
+      }
+    },
+    { passive: false },
+  );
 
   document.body.addEventListener("pointerup", (e) => {
-    if (e.button === 0) {
+    if (e.pointerType === "touch") {
+      mouse.leftClickDown = false;
+    } else if (e.button === 0) {
       mouse.leftClickDown = false;
     } else if (e.button === 2) {
       mouse.rightClickDown = false;
     }
   });
 
-  document.body.addEventListener("pointermove", (e) => {
-    const rect = canvas.getBoundingClientRect();
-    mouse.x = e.clientX - rect.left;
-    mouse.y = e.clientY - rect.top;
-  });
+  document.body.addEventListener(
+    "pointermove",
+    (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = e.clientX - rect.left;
+      mouse.y = e.clientY - rect.top;
+    },
+    { passive: false },
+  );
 
   document.body.addEventListener("pointerenter", () => {
     mouse.onCanvas = true;

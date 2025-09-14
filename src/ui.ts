@@ -8,6 +8,7 @@ planning:
 - think about what a multiple pass solution would grant us
   - no delay hover is nice.. we can delete the "nextHovered" craziness
 */
+import * as Input from "./input";
 
 export const state = {
   hovered: null as string | null, // last frames hovered
@@ -18,14 +19,10 @@ export const state = {
   cursor: "default" as CSSStyleDeclaration["cursor"],
 
   mouse: {
-    x: 0,
-    y: 0,
     prevx: 0,
     prevy: 0,
     dx: 0,
     dy: 0,
-    justClicked: false,
-    down: false,
   },
   ctx: null as CanvasRenderingContext2D | null,
 
@@ -68,18 +65,6 @@ export const state = {
   },
 };
 
-document.body.addEventListener("mousemove", (e) => {
-  state.mouse.x = e.clientX;
-  state.mouse.y = e.clientY;
-});
-document.body.addEventListener("mousedown", (e) => {
-  state.mouse.justClicked = true;
-  state.mouse.down = true;
-});
-document.body.addEventListener("mouseup", (e) => {
-  state.mouse.down = false;
-});
-
 export function register(
   id: string,
   x: number,
@@ -93,18 +78,18 @@ export function register(
     x += contentRect.x;
     y += contentRect.y;
     const mouseInWindow =
-      state.mouse.x >= contentRect.x &&
-      state.mouse.x <= contentRect.x + contentRect.width &&
-      state.mouse.y >= contentRect.y &&
-      state.mouse.y <= contentRect.y + contentRect.height;
+      Input.mouse.x >= contentRect.x &&
+      Input.mouse.x <= contentRect.x + contentRect.width &&
+      Input.mouse.y >= contentRect.y &&
+      Input.mouse.y <= contentRect.y + contentRect.height;
     mouseInsideParentWindow = mouseInWindow;
   }
 
   const hovered =
-    state.mouse.x >= x &&
-    state.mouse.x <= x + width &&
-    state.mouse.y >= y &&
-    state.mouse.y <= y + height &&
+    Input.mouse.x >= x &&
+    Input.mouse.x <= x + width &&
+    Input.mouse.y >= y &&
+    Input.mouse.y <= y + height &&
     mouseInsideParentWindow;
 
   if (hovered) {
@@ -171,7 +156,8 @@ export function button(
   if (hovered) {
     state.hovered = id;
     state.cursor = "pointer";
-    if (state.mouse.justClicked) {
+
+    if (Input.mouse.justLeftClicked) {
       state.persisted.get(id)!.hovered_t = 0;
       return true;
     }
@@ -206,7 +192,7 @@ export function checkbox(
   if (hovered) {
     state.cursor = "pointer";
   }
-  const clicked = hovered && state.mouse.justClicked;
+  const clicked = hovered && Input.mouse.justLeftClicked;
   const prevChecked = pointerValue.get();
   if (clicked) {
     pointerValue.set(!prevChecked);
@@ -288,7 +274,7 @@ export function window(
         const dragging = state.dragging === id;
         const resizing = state.resizing === id;
         if (dragging) {
-          if (state.mouse.down === false) {
+          if (Input.mouse.leftClickDown === false) {
             state.dragging = null;
           } else {
             const newX = x + state.mouse.dx;
@@ -303,12 +289,12 @@ export function window(
           }
           state.cursor = "grabbing";
         } else if (hovered) {
-          if (state.mouse.justClicked) {
+          if (Input.mouse.justLeftClicked) {
             state.dragging = id;
           }
           state.cursor = "grab";
         } else if (resizing) {
-          if (state.mouse.down === false) {
+          if (Input.mouse.leftClickDown === false) {
             state.resizing = null;
           } else {
             const newWidth = Math.max(100, width + state.mouse.dx);
@@ -413,8 +399,8 @@ export function window(
 
 export function start(ctx: CanvasRenderingContext2D) {
   state.ctx = ctx;
-  state.mouse.dx = state.mouse.x - state.mouse.prevx;
-  state.mouse.dy = state.mouse.y - state.mouse.prevy;
+  state.mouse.dx = Input.mouse.x - state.mouse.prevx;
+  state.mouse.dy = Input.mouse.y - state.mouse.prevy;
 }
 
 export function end(dt: number) {
@@ -436,9 +422,8 @@ export function end(dt: number) {
 
   state.hovered = state.nextHovered;
   state.nextHovered = null;
-  state.mouse.justClicked = false;
-  state.mouse.prevx = state.mouse.x;
-  state.mouse.prevy = state.mouse.y;
+  state.mouse.prevx = Input.mouse.x;
+  state.mouse.prevy = Input.mouse.y;
 
   // TODO: purge old entries
   state.persisted.forEach((entry, id) => {

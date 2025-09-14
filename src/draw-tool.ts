@@ -232,7 +232,7 @@ export function tick(ctx: CanvasRenderingContext2D, dt: number) {
   }
 
   Camera.drawWithCamera(ctx, state.camera, (ctx) => {
-    ctx.strokeStyle = "white";
+    ctx.strokeStyle = white;
     ctx.lineWidth = 0.5;
     ctx.strokeRect(
       -referenceRect.width / 2,
@@ -268,7 +268,7 @@ export function tick(ctx: CanvasRenderingContext2D, dt: number) {
     // draw outline of last selected shape
     if (state.lastSelected !== -1) {
       const shape = state.shapes[state.lastSelected]!;
-      ctx.strokeStyle = "white";
+      ctx.strokeStyle = white;
       ctx.lineWidth = 0.5;
       ctx.setLineDash([1, 1]);
       ctx.lineDashOffset = performance.now() * -0.002;
@@ -295,7 +295,7 @@ export function tick(ctx: CanvasRenderingContext2D, dt: number) {
       ctx.setLineDash([]);
 
       for (const corner of resizePositions) {
-        ctx.fillStyle = "white";
+        ctx.fillStyle = white;
         ctx.beginPath();
         ctx.arc(corner.x, corner.y, resizeRadius, 0, Math.PI * 2);
         ctx.fill();

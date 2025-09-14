@@ -1,6 +1,7 @@
 // import { tick } from "./demo";
 // import { tick } from "./clock-game";
-import { tick } from "./draw-tool";
+// import { tick } from "./draw-tool";
+import { tick } from "./juggling";
 
 import { startLoop } from "./canvas-render-loop";
 import { registerInputListeners } from "./input";
